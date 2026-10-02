@@ -43,7 +43,7 @@ def generate_launch_description():
 
     declare_rplidar_frame_id = DeclareLaunchArgument(
         'rplidar_frame_id',
-        default_value='laser',
+        default_value='base_scan',
         description='Frame ID for RPLidar data'
     )
 

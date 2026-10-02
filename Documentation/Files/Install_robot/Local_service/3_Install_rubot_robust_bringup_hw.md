@@ -230,6 +230,4 @@ Its structure is intentionally simple and robust:
 
 The result is a much more stable boot sequence than launching all nodes at once and relying on `respawn` to recover from startup races.
 
-The lidar frame is also set to `laser` by default instead of `base_link`, which is the typical ROS convention for a lidar sensor. If needed, the system can later define a static transform from `base_link` to `laser`.
-
-This is the recommended design for real robot bring-up on the Raspberry Pi.
+The lidar frame is set to `laser` by default. On launch file the `rplidar_frame_id` is set to `base_scan`, which is the link associated to Lidar on URDF file.

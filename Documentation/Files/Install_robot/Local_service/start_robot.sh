@@ -15,5 +15,5 @@ source /home/ubuntu/ROS2_rUBot_mecanum_ws/install/setup.bash
 #export DISPLAY=192.168.1.3:0.0
 
 # Llança el node
-ros2 launch my_robot_bringup my_robot_bringup_hw.launch.py
+ros2 launch my_robot_bringup my_robot_bringup_robust_hw.launch.py
 #ros2 run demo_nodes_cpp talker

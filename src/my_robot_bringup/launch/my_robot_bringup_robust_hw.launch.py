@@ -25,7 +25,7 @@ def generate_launch_description():
 
     declare_robot_model = DeclareLaunchArgument(
         'robot_model',
-        default_value='robot_arm/my_simple_robot.urdf',
+        default_value='rubot_arm/my_simple_robot.urdf',
         description='URDF/XACRO path inside my_robot_description/urdf'
     )
 
@@ -176,6 +176,6 @@ def generate_launch_description():
     ld.add_action(wait_for_devices)
     ld.add_action(TimerAction(period=2.0, actions=[robot_driver_hw_launch]))
     ld.add_action(TimerAction(period=4.0, actions=[usb_cam_hw_launch]))
-    ld.add_action(TimerAction(period=6.0, actions=[rplidar_hw_launch]))
+    ld.add_action(TimerAction(period=10.0, actions=[rplidar_hw_launch]))
 
     return ld

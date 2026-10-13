@@ -207,9 +207,6 @@ This lidar is simulated in URDF model as:
 - joint of fixed type
 - Gazebo plugin as a sort of "driver" to simulate the real behaviour
 
- Review the joint and link definition in URDF model.
-> Note that rpLIDAR is mounted at 180º and you need to turn the link model and the joint to reflect this in the URDF model.
-
 ![](./Images/02_rubot_model/02_lidar.png)
 
 The gazebo plugin we have used is:
@@ -436,10 +433,8 @@ To select a world and an initial robot pose:
 ros2 launch my_robot_bringup my_robot_bringup_gz.launch.py \
   world:=square_sign_left_ign.world \
   robot_model:=rubot/rubot_mecanum.urdf.xacro \
-  robot_name:=rubot_mecanum \
   x:=0.0 \
   y:=0.0 \
-  z:=0.08 \
   yaw:=0.0
 ```
 
@@ -722,7 +717,6 @@ ros2 launch my_robot_bringup my_robot_bringup_gz.launch.py \
   robot_model:=rubot/rubot_mecanum.urdf.xacro \
   x:=0.0 \
   y:=0.0 \
-  z:=0.08 \
   yaw:=0.0
 ```
 
@@ -767,7 +761,7 @@ sudo apt install ros-humble-teleop-twist-keyboard
 When you are using the virtual environment to simulate the robot behavior you have to:
 - Bringup our robot in Gazebo virtual environment
   ````shell
-  ros2 launch my_robot_bringup my_robot_bringup_gz.launch.xml
+  ros2 launch my_robot_bringup my_robot_bringup_gz.launch.py
   ````
   > The argument `use_sim_time` is by default true in this launch file
 

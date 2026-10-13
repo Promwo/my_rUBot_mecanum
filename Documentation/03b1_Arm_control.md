@@ -1,4 +1,4 @@
-# **3. Arm control**
+# **Arm control**
 
 This document describes the basic procedure for testing the 6-DOF robot arm controlled by SG90 servos and an Arduino Nano ESP32 within the `my_rUBot_mecanum` repository.
 

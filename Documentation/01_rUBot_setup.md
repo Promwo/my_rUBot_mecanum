@@ -59,21 +59,6 @@ In the case of **TheConstruct interface** environment:
   ```shell
   git pull
   ```
-- Add in .bashrc the lines:
-  ````shell
-  source /opt/ros/humble/setup.bash
-  source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
-  source /home/user/my_rUBot_mecanum/install/setup.bash
-  export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-  cd /home/user/my_rUBot_mecanum
-  ````
-  > Copy and modify the `user.email` and `user.name` accordingly.
-- If the compilation process returns warnings on "Deprecated setup tools", proceed with:
-  ````shell
-  sudo apt install python3-pip
-  pip3 list | grep setuptools
-  pip3 install setuptools==58.2.0
-  ````
 - If the compilation process returns warnings on PREFIX_PATH:
   ````shell
   unset COLCON_PREFIX_PATH
@@ -84,7 +69,32 @@ In the case of **TheConstruct interface** environment:
   source /opt/ros/humble/setup.bash
   colcon build
   ````
+- Add in .bashrc the lines:
+  ````shell
+  source /opt/ros/humble/setup.bash
+  source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
+  source /home/user/my_rUBot_mecanum/install/setup.bash
+  export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+  cd /home/user/my_rUBot_mecanum
+  ````
 - Open a new terminal to ensure the .bashrc is read again
+
+- Bringup your robot model in a pre-defined world:
+
+  ```bash
+  ros2 launch my_robot_bringup my_robot_bringup_gz.launch.py \
+    world:=square2m_wall_ign.world \
+    robot_model:=rubot/rubot_mecanum.urdf.xacro \
+    x:=0.0 \
+    y:=0.0 \
+    z:=0.0 \
+    yaw:=0.0
+  ```
+
+  ![](./Images/01_Setup/Bringup_gz.png)
+
+- Open in a new terminal `rviz2` and read the robot model and available topics:
+![](./Images/01_Setup/Bringup_rviz2.png)
 
 ## **2. Setup the robot project for real control**
 

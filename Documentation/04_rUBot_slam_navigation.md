@@ -68,7 +68,7 @@ These three packages are organized in the `src/Navigation_Projects` subfolder wi
     ```shell
     ros2 launch my_robot_bringup my_robot_bringup_gz.launch.py world:=square_sign_left_ign.world robot_model:=rubot/rubot_mecanum.urdf.xacro x:=0.0 y:=0.0 yaw:=0.0
     ```
-
+    ![](./Images/04_Slam/bringup1.png)
     > Change `world` to the name of the world you have created.
 
   - For the real robot, the bringup is already running when the robot is turned on.
@@ -79,6 +79,7 @@ These three packages are organized in the `src/Navigation_Projects` subfolder wi
     ```shell
     ros2 launch my_robot_cartographer cartographer.launch.py use_sim_time:=true
     ```
+    ![](./Images/04_Slam/slam1.png)
 
     > Use `use_sim_time:=true` with Gazebo Sim. It is enabled by default in `cartographer.launch.py`.
 
@@ -130,6 +131,9 @@ When using **Gazebo Virtual environment**:
   ```
 
   `rubot_sw_ign.yaml` is the general Gazebo Sim configuration, whereas `rubot_sw_lidar_ign.yaml` contains the configuration optimized specifically for lidar navigation. Both set the initial pose to `[0.0, 0.0, 0.0]` and include parameters adapted to the mecanum robot and Gazebo Sim.
+
+  ![](./Images/04_Slam/nav1.png)
+  ![](./Images/04_Slam/nav2.png)
 
 When using **Real robot**:
 - Before launching Nav2, physically place the robot at the pose defined as `[0.0, 0.0, 0.0]` when the map was created. Keep the robot stationary and reset its odometry:
@@ -202,6 +206,7 @@ We can create a Python node to interact with the Nav2 topics and actions. To nav
     ```shell
     ros2 launch my_robot_navigation2 navigation2_robot.launch.py use_sim_time:=true map_file:=map_square_sign_ign.yaml params_file:=rubot_sw_ign.yaml
     ```
+    ![](./Images/04_Slam/nav1.png)
 
   - For the real robot:
 
@@ -219,6 +224,7 @@ We can create a Python node to interact with the Nav2 topics and actions. To nav
   ```shell
   ros2 launch my_robot_nav_control nav_waypoints.launch.py wp_file:=waypoints_sw_ign.yaml
   ```
+  ![](./Images/04_Slam/nav2goals.png)
 
 - The parameters are defined in `waypoints_sw_ign.yaml`. Each pose uses the format `[x, y, yaw]`, expressed in the `map` frame, with `yaw` in radians:
 

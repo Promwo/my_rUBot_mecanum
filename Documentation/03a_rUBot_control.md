@@ -241,6 +241,8 @@ We have to launch the "my_robot_selfcontrol.launch.xml" file in the "my_robot_co
 ros2 launch my_robot_bringup my_robot_bringup_gz.launch.py world:=square4m_wall_ign.world robot_model:=rubot/rubot_mecanum.urdf.xacro x:=1.5 y:=-1.5 yaw:=0.5
 ros2 launch my_robot_control my_robot_selfcontrol.launch.xml time_to_stop:=10.0
 ```
+![](./Images/03_Control/selfcontrol.png)
+
 >- Verify in rviz if you have to change the fixed frame to "odom" frame
 >- You can test the behaviour by tuning the defined parameters
 
@@ -286,7 +288,7 @@ Two wall-follower nodes are available:
 - **Holonomic version — `my_rubot_wallfollower_holonomic.py`:** also uses lateral velocity (`linear.y`). While following the right wall, it corrects the lateral distance and uses a proportional rotation to align the robot with the wall.
 
 The algorithm is based on LiDAR range tests and specific actions for each region:
-![](./Images/03_Control/10_lidar_rg.png)
+![](./Images/03_Control/lidar_robot_regions.png)
 
 **VIRTUAL environment**
 
@@ -295,7 +297,7 @@ We have to launch the "my_robot_wallfollower.launch.xml" file in the "my_robot_c
 ros2 launch my_robot_bringup my_robot_bringup_gz.launch.py world:=square4m_wall_ign.world robot_model:=rubot/rubot_mecanum.urdf.xacro x:=1.5 y:=-1.5 yaw:=0.5
 ros2 launch my_robot_control my_robot_wallfollower.launch.xml time_to_stop:=50.0
 ```
-
+![](./Images/03_Control/wallfollower1.png)
 To test the holonomic version, keep the same simulation running and execute:
 
 ```shell
@@ -303,6 +305,7 @@ ros2 launch my_robot_control my_rubot_wallfollower_holonomic.launch.py time_to_s
 ```
 
 >- You can test the behaviour by tuning the defined parameters
+![](./Images/03_Control/wallfollower2.png)
 
 **Activity: rUBot wall-follower**
 

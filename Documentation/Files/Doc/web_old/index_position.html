@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS Web Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .connection-form {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+
+        .position-display {
+            width: 200px;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="connection-form">
+        <input type="text" id="rosbridge-address" placeholder="ws://localhost:9090">
+        <button onclick="connectToROS()">Connect</button>
+    </div>
+    <div class="dashboard">
+        <div class="position-display">
+            <h3>Position</h3>
+            <p>X: <span id="position-x">0</span></p>
+            <p>Y: <span id="position-y">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        let ros;
+
+        function connectToROS() {
+            const rosbridgeAddress = document.getElementById('rosbridge-address').value;
+            ros = new ROSLIB.Ros({
+                url: rosbridgeAddress
+            });
+
+            ros.on('connection', function () {
+                console.log('Connected to rosbridge server.');
+                setupTopics();
+            });
+
+            ros.on('error', function (error) {
+                console.error('Error connecting to rosbridge server:', error);
+            });
+
+            ros.on('close', function () {
+                console.log('Connection to rosbridge server closed.');
+            });
+        }
+
+        function setupTopics() {
+            // Set up odometry topic
+            const odomTopic = new ROSLIB.Topic({
+                ros: ros,
+                name: '/odom',
+                messageType: 'nav_msgs/Odometry'
+            });
+
+            odomTopic.subscribe(function (message) {
+                document.getElementById('position-x').textContent = message.pose.pose.position.x.toFixed(2);
+                document.getElementById('position-y').textContent = message.pose.pose.position.y.toFixed(2);
+            });
+        }
+
+
+    </script>
+</body>
+
+</html>

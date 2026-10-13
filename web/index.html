@@ -140,6 +140,35 @@
 
     .map-display { width: min(280px, 100%); }
 
+    .map-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .map-toolbar h3 { margin: 0; }
+    .map-scale {
+      margin: 6px 0;
+      color: #ddd;
+      font-size: 0.8rem;
+    }
+
+    .map-toolbar button {
+      padding: 6px 10px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #mappingBtn.active {
+      color: #fff;
+      background: #2ecc71;
+      border-color: #2ecc71;
+    }
+
     .image-view {
       width: 360px;
       height: 270px;
@@ -152,7 +181,9 @@
 
     .map-image {
       width: 100%;
+      max-width: 100%;
       height: auto;
+      box-sizing: border-box;
       border: 1px solid var(--card-bd);
       border-radius: 5px;
       display: block;
@@ -205,18 +236,24 @@
       <div class="joystick-container" id="joystick_h"></div>
 
       <div class="joy-vel">
-        vₓ: <span id="vx">0.00</span> m/s · vᵧ: <span id="vy">0.00</span> m/s
+        v<sub>x</sub>: <span id="vx">0.00</span> m/s &middot;
+        v<sub>y</sub>: <span id="vy">0.00</span> m/s
       </div>
 
       <div class="omega-wrap">
-        <label for="omegaSlider">ω:</label>
-        <input id="omegaSlider" type="range" min="-1" max="1" step="0.01" value="0" />
-        <span id="omegaVal">0.00</span> rad/s
+        <label for="omegaSlider">&omega;:</label>
+        <input id="omegaSlider" type="range" min="-45" max="45" step="1" value="0" />
+        <span id="omegaVal">0</span> &deg;/s
       </div>
     </aside>
 
     <div class="map-display">
-      <h3>Map + LiDAR</h3>
+      <div class="map-toolbar">
+        <h3>Map + LiDAR</h3>
+        <button id="mappingBtn" type="button" aria-pressed="false">Mapping: OFF</button>
+        <button id="resetMapBtn" type="button">Reset map</button>
+      </div>
+      <p class="map-scale">X/Y: -1.5 to +1.5 m &middot; 10 intervals of 0.30 m</p>
       <canvas id="map-canvas" class="map-image" width="200" height="200"></canvas>
     </div>
 
@@ -231,13 +268,24 @@
   <script>
     let ros;
     let cmdVelTopic;
+    let controlsInitialized = false;
 
-    const MAP_RESOLUTION = 0.01;   // m/px
+    const MAP_RESOLUTION = 0.01;   // metres per occupancy cell
+    const MAP_MIN_X = -1.50;
+    const MAP_MAX_X =  1.50;
+    const MAP_MIN_Y = -1.50;
+    const MAP_MAX_Y =  1.50;
+    const MAP_GRID_WIDTH = Math.round((MAP_MAX_Y - MAP_MIN_Y) / MAP_RESOLUTION);
+    const MAP_GRID_HEIGHT = Math.round((MAP_MAX_X - MAP_MIN_X) / MAP_RESOLUTION);
+    const WALL_THRESHOLD = 4;
+    const HIT_INCREMENT = 2;
+    const MISS_DECREMENT = 1;
+    const MAX_EVIDENCE = 12;
     const ROBOT_LEN = 0.30;        // 30cm (X forward)
     const ROBOT_WID = 0.20;        // 20cm (Y lateral)
     const SPEED_VECTOR_GAIN = 0.5; // metres de fletxa per (m/s)
-    const maxSpeed = 0.3;
-    const maxTurn  = 0.4;
+    const maxSpeedX = 0.2;
+    const maxSpeedY = 0.2;
     const distanceFactor = 75;
 
     let currentLinearX = 0;
@@ -246,6 +294,11 @@
 
     let mapImage = new Image();
     let latestScan = null;
+    const occupancyEvidence = new Int16Array(MAP_GRID_WIDTH * MAP_GRID_HEIGHT);
+    let mappingEnabled = false;
+    let mapOriginSet = false;
+    let mapOriginX = 0;
+    let mapOriginY = 0;
 
     let odomCenterSet = false;
     let odomCenterX = 0;
@@ -260,6 +313,8 @@
     let lastRobotX = 0;
     let lastRobotY = 0;
     let lastRobotYaw = 0; // yaw relatiu en frame món (no invertit)
+    let lastVelocityX = 0;
+    let lastVelocityY = 0;
 
     function getRosbridgeAddress() {
       const currentUrl = window.location.href;
@@ -400,9 +455,11 @@
 
         const vx_disp = vx_rel;
         const vy_disp = -vy_left_rel;
+        lastVelocityX = vx_disp;
+        lastVelocityY = vy_disp;
 
         drawRobotState(lastRobotX, lastRobotY,
-                       vx_disp, vy_disp,
+                       lastVelocityX, lastVelocityY,
                        lastRobotYaw, latestScan);
       });
 
@@ -413,6 +470,15 @@
       });
       scanTopic.subscribe(msg => {
         latestScan = msg;
+        if (odomCenterSet && yawOffsetSet) {
+          if (mappingEnabled) {
+            ensureMapOrigin();
+            updateOccupancyGrid(msg);
+          }
+          drawRobotState(lastRobotX, lastRobotY,
+                         lastVelocityX, lastVelocityY,
+                         lastRobotYaw, latestScan);
+        }
       });
     }
 
@@ -426,22 +492,143 @@
       canvas.height = Math.round(cssH * dpr);
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawRobotState(lastRobotX, lastRobotY,
+                     lastVelocityX, lastVelocityY,
+                     lastRobotYaw, latestScan);
     }
 
     // Frame display: +X amunt, +Y dreta
     function worldToPixel(x, y, W, H) {
-      const px = W / 2 + (y / MAP_RESOLUTION);
-      const py = H / 2 - (x / MAP_RESOLUTION);
+      const px = (y - MAP_MIN_Y) / (MAP_MAX_Y - MAP_MIN_Y) * W;
+      const py = (MAP_MAX_X - x) / (MAP_MAX_X - MAP_MIN_X) * H;
       return [px, py];
     }
 
+    function worldToGrid(x, y) {
+      if (x < MAP_MIN_X || x >= MAP_MAX_X ||
+          y < MAP_MIN_Y || y >= MAP_MAX_Y) return -1;
+
+      const col = Math.floor((y - MAP_MIN_Y) / MAP_RESOLUTION);
+      const row = Math.floor((MAP_MAX_X - x) / MAP_RESOLUTION);
+      if (row < 0 || row >= MAP_GRID_HEIGHT ||
+          col < 0 || col >= MAP_GRID_WIDTH) return -1;
+      return row * MAP_GRID_WIDTH + col;
+    }
+
+    function scanPointInDisplay(range, angle, robotX, robotY, yawRel) {
+      const xRobot = range * Math.cos(angle);
+      const yLeftRobot = range * Math.sin(angle);
+      const c = Math.cos(yawRel);
+      const s = Math.sin(yawRel);
+      const xWorld = robotX + c * xRobot - s * yLeftRobot;
+      const yLeftWorld = -robotY + s * xRobot + c * yLeftRobot;
+      return [xWorld, -yLeftWorld];
+    }
+
+    function ensureMapOrigin() {
+      if (!mapOriginSet && odomCenterSet) {
+        mapOriginX = lastRobotX;
+        mapOriginY = lastRobotY;
+        mapOriginSet = true;
+      }
+    }
+
+    function toggleMapping() {
+      mappingEnabled = !mappingEnabled;
+      if (mappingEnabled) ensureMapOrigin();
+
+      const button = document.getElementById('mappingBtn');
+      button.textContent = mappingEnabled ? 'Mapping: ON' : 'Mapping: OFF';
+      button.classList.toggle('active', mappingEnabled);
+      button.setAttribute('aria-pressed', String(mappingEnabled));
+      drawRobotState(lastRobotX, lastRobotY,
+                     lastVelocityX, lastVelocityY,
+                     lastRobotYaw, latestScan);
+    }
+
+    function updateOccupancyGrid(scanMsg) {
+      const ranges = scanMsg.ranges || [];
+      const rangeMin = scanMsg.range_min;
+      const rangeMax = scanMsg.range_max;
+      if (!Number.isFinite(rangeMax) || rangeMax <= 0) return;
+
+      const freeCells = new Set();
+      const hitCells = new Set();
+      const rayStep = MAP_RESOLUTION * 2;
+
+      for (let i = 0; i < ranges.length; i++) {
+        const measuredRange = ranges[i];
+        const finiteRange = Number.isFinite(measuredRange);
+        const noReturn = measuredRange === null || measuredRange === Infinity;
+        if ((!finiteRange && !noReturn) ||
+            (finiteRange && measuredRange < rangeMin)) continue;
+        const hasHit = Number.isFinite(measuredRange) &&
+                       measuredRange >= rangeMin && measuredRange <= rangeMax;
+
+        const rayRange = hasHit ? measuredRange : rangeMax;
+        const angle = scanMsg.angle_min + i * scanMsg.angle_increment;
+        const freeEnd = hasHit ? Math.max(rangeMin, rayRange - MAP_RESOLUTION * 3) : rayRange;
+
+        for (let d = rangeMin; d < freeEnd; d += rayStep) {
+          const [x, y] = scanPointInDisplay(d, angle,
+                                           lastRobotX, lastRobotY, lastRobotYaw);
+          const index = worldToGrid(x - mapOriginX, y - mapOriginY);
+          if (index >= 0) freeCells.add(index);
+        }
+
+        if (hasHit) {
+          const [x, y] = scanPointInDisplay(rayRange, angle,
+                                           lastRobotX, lastRobotY, lastRobotYaw);
+          const index = worldToGrid(x - mapOriginX, y - mapOriginY);
+          if (index >= 0) hitCells.add(index);
+        }
+      }
+
+      for (const index of freeCells) {
+        if (!hitCells.has(index)) {
+          occupancyEvidence[index] = Math.max(0,
+            occupancyEvidence[index] - MISS_DECREMENT);
+        }
+      }
+      for (const index of hitCells) {
+        occupancyEvidence[index] = Math.min(MAX_EVIDENCE,
+          occupancyEvidence[index] + HIT_INCREMENT);
+      }
+    }
+
+    function resetMap() {
+      occupancyEvidence.fill(0);
+      if (odomCenterSet) {
+        mapOriginX = lastRobotX;
+        mapOriginY = lastRobotY;
+        mapOriginSet = true;
+      }
+      drawRobotState(lastRobotX, lastRobotY,
+                     lastVelocityX, lastVelocityY,
+                     lastRobotYaw, latestScan);
+    }
+
+    function drawOccupancyGrid(ctx, W, H) {
+      const cellW = W / MAP_GRID_WIDTH;
+      const cellH = H / MAP_GRID_HEIGHT;
+      ctx.save();
+      ctx.fillStyle = 'black';
+      for (let row = 0; row < MAP_GRID_HEIGHT; row++) {
+        const offset = row * MAP_GRID_WIDTH;
+        for (let col = 0; col < MAP_GRID_WIDTH; col++) {
+          if (occupancyEvidence[offset + col] >= WALL_THRESHOLD) {
+            ctx.fillRect(col * cellW, row * cellH,
+                         Math.ceil(cellW), Math.ceil(cellH));
+          }
+        }
+      }
+      ctx.restore();
+    }
+
     function drawAxes(ctx, W, H) {
-      const cx = W / 2;
-      const cy = H / 2;
       const metersPerTick = 0.30;
-      const pxPerMeter = 1.0 / MAP_RESOLUTION;
-      const tickPx = metersPerTick * pxPerMeter;
       const tickLen = 5;
+      const [cx, cy] = worldToPixel(0, 0, W, H);
 
       ctx.save();
 
@@ -454,10 +641,10 @@
       ctx.stroke();
 
       // Ticks X
-      const maxXTicks = Math.floor((H / 2) / tickPx);
+      const maxXTicks = Math.floor(MAP_MAX_X / metersPerTick);
       for (let i = 1; i <= maxXTicks; i++) {
-        const yUp = cy - i * tickPx;
-        const yDn = cy + i * tickPx;
+        const [, yUp] = worldToPixel(i * metersPerTick, 0, W, H);
+        const [, yDn] = worldToPixel(-i * metersPerTick, 0, W, H);
         ctx.beginPath(); ctx.moveTo(cx - tickLen, yUp); ctx.lineTo(cx + tickLen, yUp); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(cx - tickLen, yDn); ctx.lineTo(cx + tickLen, yDn); ctx.stroke();
       }
@@ -470,10 +657,10 @@
       ctx.stroke();
 
       // Ticks Y
-      const maxYTicks = Math.floor((W / 2) / tickPx);
+      const maxYTicks = Math.floor(MAP_MAX_Y / metersPerTick);
       for (let i = 1; i <= maxYTicks; i++) {
-        const xR = cx + i * tickPx;
-        const xL = cx - i * tickPx;
+        const [xR] = worldToPixel(0, i * metersPerTick, W, H);
+        const [xL] = worldToPixel(0, -i * metersPerTick, W, H);
         ctx.beginPath(); ctx.moveTo(xR, cy - tickLen); ctx.lineTo(xR, cy + tickLen); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(xL, cy - tickLen); ctx.lineTo(xL, cy + tickLen); ctx.stroke();
       }
@@ -486,6 +673,8 @@
       const ctx = canvas.getContext('2d');
       const W = canvas.clientWidth || canvas.width;
       const H = canvas.clientHeight || canvas.height;
+      const mapRobotX = robotX - mapOriginX;
+      const mapRobotY = robotY - mapOriginY;
 
       ctx.clearRect(0, 0, W, H);
 
@@ -493,14 +682,11 @@
         ctx.drawImage(mapImage, 0, 0, W, H);
       }
 
+      drawOccupancyGrid(ctx, W, H);
       drawAxes(ctx, W, H);
 
       // IMPORTANT: al canvas hem reflectit Y, així que l'angle de dibuix s'inverteix
       const yawDraw = -yawRel;
-
-      // Precompute robot en frame inicial relatiu
-      const X_rel = robotX;
-      const Y_left_rel = -robotY;
 
       // ---- LiDAR (en món correcte, sense invertir) ----
       if (scanMsg && yawOffsetSet && odomCenterSet) {
@@ -519,22 +705,11 @@
 
           const a = angleMin + i * angleInc;
 
-          // Punt en robot frame (X forward, Y left)
-          const x_r = r * Math.cos(a);
-          const y_r = r * Math.sin(a);
+          const [Xd, Yd] = scanPointInDisplay(r, a,
+                                             robotX, robotY, yawRel);
 
-          const c = Math.cos(yawRel);
-          const s = Math.sin(yawRel);
-
-          // En frame inicial relatiu (no display)
-          const Xp_rel = X_rel + c * x_r - s * y_r;
-          const Yp_left_rel = Y_left_rel + s * x_r + c * y_r;
-
-          // A display (+Y dreta)
-          const Xd = Xp_rel;
-          const Yd = -Yp_left_rel;
-
-          const [px, py] = worldToPixel(Xd, Yd, W, H);
+          const [px, py] = worldToPixel(Xd - mapOriginX,
+                                        Yd - mapOriginY, W, H);
           if (px >= 0 && px <= W && py >= 0 && py <= H) {
             ctx.fillRect(px, py, 2, 2);
           }
@@ -544,7 +719,7 @@
       }
 
       // ---- Robot rectangle 30x20 cm ----
-      const [cx, cy] = worldToPixel(robotX, robotY, W, H);
+      const [cx, cy] = worldToPixel(mapRobotX, mapRobotY, W, H);
       const hx = ROBOT_LEN / 2;
       const hy = ROBOT_WID / 2;
 
@@ -561,8 +736,8 @@
         const [xr, yr] = corners[i];
         const c = Math.cos(yawDraw);
         const s = Math.sin(yawDraw);
-        const Xw = robotX + c * xr - s * yr;
-        const Yw = robotY + s * xr + c * yr;
+        const Xw = mapRobotX + c * xr - s * yr;
+        const Yw = mapRobotY + s * xr + c * yr;
         const [px, py] = worldToPixel(Xw, Yw, W, H);
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
@@ -578,8 +753,8 @@
       // ---- Orientació (blava) amb yawDraw ----
       {
         const arrowLen = 0.20;
-        const Xtip = robotX + Math.cos(yawDraw) * arrowLen;
-        const Ytip = robotY + Math.sin(yawDraw) * arrowLen;
+        const Xtip = mapRobotX + Math.cos(yawDraw) * arrowLen;
+        const Ytip = mapRobotY + Math.sin(yawDraw) * arrowLen;
         const [ax, ay] = worldToPixel(Xtip, Ytip, W, H);
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -593,8 +768,8 @@
       const speed = Math.hypot(velX, velY);
       if (speed > 0.01) {
         const len_m = speed * SPEED_VECTOR_GAIN;
-        const Xv = robotX + (velX / speed) * len_m;
-        const Yv = robotY + (velY / speed) * len_m;
+        const Xv = mapRobotX + (velX / speed) * len_m;
+        const Yv = mapRobotY + (velY / speed) * len_m;
         const [vx_px, vy_px] = worldToPixel(Xv, Yv, W, H);
 
         ctx.beginPath();
@@ -620,14 +795,8 @@
     }
 
     function publishTwist() {
-      const mag = Math.hypot(currentLinearX, currentLinearY);
-      let vx = currentLinearX;
-      let vy = currentLinearY;
-      if (mag > maxSpeed && mag > 0) {
-        const s = maxSpeed / mag;
-        vx *= s;
-        vy *= s;
-      }
+      const vx = Math.max(-maxSpeedX, Math.min(maxSpeedX, currentLinearX));
+      const vy = Math.max(-maxSpeedY, Math.min(maxSpeedY, currentLinearY));
 
       if (!cmdVelTopic) return;
       const twist = new ROSLIB.Message({
@@ -637,7 +806,21 @@
       cmdVelTopic.publish(twist);
     }
 
+    function stopRobot() {
+      currentLinearX = 0;
+      currentLinearY = 0;
+      currentAngularZ = 0;
+      document.getElementById('vx').textContent = '0.00';
+      document.getElementById('vy').textContent = '0.00';
+      document.getElementById('omegaSlider').value = 0;
+      document.getElementById('omegaVal').textContent = '0';
+      publishTwist();
+    }
+
     function setupControls() {
+      if (controlsInitialized) return;
+      controlsInitialized = true;
+
       const j = nipplejs.create({
         zone: document.getElementById('joystick_h'),
         mode: 'static',
@@ -654,8 +837,8 @@
       j.on('move', (evt, data) => {
         const ratio = Math.min(data.distance / distanceFactor, 1.0);
         const a = data.angle.radian;
-        currentLinearX = Math.sin(a) * maxSpeed * ratio;
-        currentLinearY = -Math.cos(a) * maxSpeed * ratio;
+        currentLinearX = Math.sin(a) * maxSpeedX * ratio;
+        currentLinearY = -Math.cos(a) * maxSpeedY * ratio;
         vxSpan.textContent = currentLinearX.toFixed(2);
         vySpan.textContent = currentLinearY.toFixed(2);
       });
@@ -667,22 +850,35 @@
         vySpan.textContent = '0.00';
       });
 
-      // ω: esquerra (+), dreta (-)
+      // ω: esquerra (+), dreta (-). ROS rep la velocitat en rad/s.
       omegaSlider.addEventListener('input', () => {
-        const v = parseFloat(omegaSlider.value) || 0;
-        currentAngularZ = -v * maxTurn;
-        omegaVal.textContent = currentAngularZ.toFixed(2);
+        const degreesPerSecond = parseFloat(omegaSlider.value) || 0;
+        currentAngularZ = -degreesPerSecond * Math.PI / 180;
+        omegaVal.textContent = (-degreesPerSecond).toFixed(0);
+      });
+
+      // En deixar anar el slider, torna al centre i atura la rotació.
+      omegaSlider.addEventListener('change', () => {
+        omegaSlider.value = 0;
+        currentAngularZ = 0;
+        omegaVal.textContent = '0';
+        publishTwist();
       });
 
       setInterval(() => {
         publishTwist();
-        omegaVal.textContent = currentAngularZ.toFixed(2);
       }, 50);
     }
 
     window.addEventListener('resize', resizeMapCanvas);
+    window.addEventListener('pagehide', stopRobot);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopRobot();
+    });
     window.addEventListener('DOMContentLoaded', () => {
       resizeMapCanvas();
+      document.getElementById('mappingBtn').addEventListener('click', toggleMapping);
+      document.getElementById('resetMapBtn').addEventListener('click', resetMap);
       const robotInput = document.getElementById('robotNumber');
       robotInput.addEventListener('change', (e) => {
         let v = parseInt(e.target.value);

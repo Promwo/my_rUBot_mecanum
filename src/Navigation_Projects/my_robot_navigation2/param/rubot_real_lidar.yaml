@@ -177,7 +177,7 @@ controller_server:
       angular_granularity: 0.025
       transform_tolerance: 0.3
 
-      xy_goal_tolerance: 0.12
+      xy_goal_tolerance: 0.20
 
       short_circuit_trajectory_evaluation: True
       stateful: True

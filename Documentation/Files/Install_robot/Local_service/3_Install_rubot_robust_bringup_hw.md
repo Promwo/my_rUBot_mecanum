@@ -43,9 +43,9 @@ lsusb
 You should see entries similar to:
 
 ```bash
-Bus 001 Device 005: ID 2341:0043 Arduino SA Uno R3 (CDC ACM)
+Bus 001 Device 005: ID 2341:0070 Arduino SA Uno R3 (CDC ACM)
 Bus 001 Device 006: ID 10c4:ea60 Silicon Labs CP210x UART Bridge
-Bus 001 Device 007: ID 0c45:6366 Microdia USB Camera
+Bus 001 Device 007: ID 046d:0825 Microdia USB Camera
 ```
 
 The important values are:
@@ -96,9 +96,9 @@ sudo nano /etc/udev/rules.d/99-rubot-hardware.rules
 Then add rules like this:
 
 ```bash
-SUBSYSTEM=="tty", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0043", SYMLINK+="robot_arduino"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0070", SYMLINK+="robot_arduino"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="robot_lidar"
-SUBSYSTEM=="video4linux", ATTRS{idVendor}=="0c45", ATTRS{idProduct}=="6366", SYMLINK+="robot_camera"
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0825", SYMLINK+="robot_camera"
 ```
 
 These rules map each device to a stable name.
